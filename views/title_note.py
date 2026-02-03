@@ -1,0 +1,160 @@
+"""Модуль окна просмотра названий заметок."""
+
+import tkinter as tk
+from state.json_state import JsonState
+from strategies.view_titles_strategy import SearchTitlesStrategy
+
+
+class TitleNote(tk.Toplevel):
+    """Окно для просмотра списка названий всех заметок.
+
+    Предоставляет пользовательский интерфейс для отображения только
+    заголовков заметок с возможностью прокрутки длинного списка
+    через Canvas и Scrollbar.
+
+    Attributes:
+        parent: Родительское окно Tkinter.
+        state: Экземпляр JsonState для загрузки данных заметок.
+        __button_title: Кнопка для инициации загрузки и отображения названий.
+        __label_title: Метка для отображения списка названий заметок.
+        __label_error: Метка для отображения сообщений об ошибках.
+        __canvas: Canvas для создания прокручиваемой области.
+        __scrollbar: Вертикальный скроллбар для прокрутки содержимого.
+        __scrollable_frame: Frame внутри Canvas для размещения метки с названиями.
+    """
+
+    def __init__(self, parent: tk.Tk) -> None:
+        """Инициализирует окно просмотра названий заметок.
+
+        Создает дочернее окно Toplevel, настраивает его параметры,
+        инициализирует виджеты и устанавливает иконку приложения.
+
+        Args:
+            parent: Родительское окно Tkinter.
+        """
+        super().__init__(parent)
+        self.parent = parent
+        
+        self.state = JsonState()
+        
+        self.__configure_window()
+        self.__configure_widgets()
+        self.__pack_widgets()
+        self.__add_icon()
+        
+        self.__button_title: tk.Button
+        self.__label_title: tk.Label
+        self.__label_error: tk.Label
+        self.__canvas: tk.Canvas
+        self.__scrollbar: tk.Scrollbar
+        self.__scrollable_frame: tk.Frame
+
+    def __configure_window(self) -> None:
+        """Настраивает параметры окна просмотра названий заметок.
+
+        Устанавливает заголовок, размеры и цвет фона окна.
+        """
+        self.title("Просмотр названий заметок")
+        self.geometry("700x500")
+        self.configure(bg="#f8f9fa")
+    
+    def __configure_widgets(self) -> None:
+        """Инициализирует и настраивает виджеты окна.
+
+        Создает кнопку просмотра, Canvas с Scrollbar для прокрутки,
+        Frame для размещения метки и саму метку для отображения названий.
+        """
+        # Кнопка просмотра
+        self.__button_title = tk.Button(
+            self, 
+            text="📋 Показать все названия", 
+            command=self.__show_title_note,
+            font=("Arial", 12, "bold"),
+            bg="#28a745",
+            fg="white",
+            relief=tk.FLAT,
+            padx=25,
+            pady=10,
+            cursor="hand2"
+        )
+        
+        # Создаём Canvas для прокрутки
+        self.__canvas = tk.Canvas(self, bg="#f8f9fa", highlightthickness=0)
+        self.__scrollbar = tk.Scrollbar(self, orient="vertical", command=self.__canvas.yview)
+        self.__canvas.configure(yscrollcommand=self.__scrollbar.set)
+        
+        # Frame внутри Canvas для размещения метки
+        self.__scrollable_frame = tk.Frame(self.__canvas, bg="#f8f9fa")
+        self.__canvas.create_window((0, 0), window=self.__scrollable_frame, anchor="nw")
+        
+        # Метка теперь внутри scrollable_frame
+        self.__label_title = tk.Label(
+            self.__scrollable_frame,
+            text="", 
+            font=("Arial", 11),
+            bg="#f8f9fa",
+            fg="#212529",
+            justify=tk.LEFT,
+            wraplength=600
+        )
+        
+        # Метка ошибок (остаётся вне прокрутки)
+        self.__label_error = tk.Label(
+            self, 
+            text="", 
+            foreground="#dc3545",
+            font=("Arial", 11, "bold"),
+            bg="#f8f9fa"
+        )
+    
+    def __pack_widgets(self) -> None:
+        """Размещает виджеты в окне.
+
+        Упаковывает кнопку, Canvas с Scrollbar и метки с заданными отступами
+        и параметрами размещения для обеспечения корректного отображения
+        и функциональности прокрутки.
+        """
+        # Центрирование и отступы
+        self.__button_title.pack(pady=(40, 30))
+        
+        # Упаковываем canvas и scrollbar
+        self.__canvas.pack(side="left", fill="both", expand=True, padx=30, pady=10)
+        self.__scrollbar.pack(side="right", fill="y", pady=10)
+        
+        self.__label_title.pack(anchor="w")
+        self.__label_error.pack(pady=10)
+        
+        # Обновляем прокрутку при изменении содержимого
+        self.__scrollable_frame.bind(
+            "<Configure>",
+            lambda e: self.__canvas.configure(scrollregion=self.__canvas.bbox("all"))
+        )
+    
+    def __add_icon(self) -> None:
+        """Устанавливает иконку окна.
+
+        Загружает иконку из файла 'static/icons/app.ico' и устанавливает
+        ее для текущего окна.
+
+        Raises:
+            FileNotFoundError: Если файл иконки не найден.
+            tk.TclError: Если формат иконки не поддерживается.
+        """
+        self.iconbitmap("static/icons/app.ico")
+    
+    def __show_title_note(self) -> None:
+        """Отображает список названий всех заметок.
+
+        Очищает предыдущие результаты, загружает все заметки через JsonState,
+        применяет стратегию SearchTitlesStrategy для получения только названий
+        и отображает результат. Если заметок нет, показывает соответствующее
+        сообщение об ошибке.
+        """
+        self.__label_title["text"] = ""
+        self.__label_error["text"] = ""
+        strategy = SearchTitlesStrategy()
+        notes = self.state.load_notes()
+        if strategy.execute(notes):
+            self.__label_title["text"] += strategy.execute(notes)
+        else:
+            self.__label_error["text"] = "Список названий пуст"
